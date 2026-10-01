@@ -1,0 +1,53 @@
+# Network Automation Center - production stack
+#   1. copy .env.example to .env (root) and fill in JWT_SECRET + CREDENTIAL_KEY
+#   2. docker compose up -d --build
+#   3. open http://<server>:8080 and create the first administrator
+#
+# Generate secrets with:  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      MONGODB_URI: mongodb://mongo:27017/network_automation
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-12h}
+      CREDENTIAL_KEY: ${CREDENTIAL_KEY:?Set CREDENTIAL_KEY in .env (64 hex chars)}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
+      SSH_READY_TIMEOUT_MS: ${SSH_READY_TIMEOUT_MS:-20000}
+      SSH_COMMAND_TIMEOUT_MS: ${SSH_COMMAND_TIMEOUT_MS:-60000}
+      SSH_LONG_COMMAND_TIMEOUT_MS: ${SSH_LONG_COMMAND_TIMEOUT_MS:-180000}
+      JOB_CONCURRENCY: ${JOB_CONCURRENCY:-5}
+      RESTCONF_VERIFY_TLS: ${RESTCONF_VERIFY_TLS:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      # Optional: expose the API directly (the frontend proxies to it internally)
+      - "5000:5000"
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+
+volumes:
+  mongo-data:
