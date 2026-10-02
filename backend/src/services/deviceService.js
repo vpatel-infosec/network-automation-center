@@ -21,13 +21,45 @@ export function buildListQuery(filters = {}) {
   const query = {};
   if (filters.q) {
     const rx = new RegExp(escapeRegex(filters.q), 'i');
-    query.$or = [{ name: rx }, { host: rx }, { location: rx }, { tags: rx }];
+    query.$or = [{ name: rx }, { host: rx }, { site: rx }, { location: rx }, { tags: rx }];
   }
   if (filters.vendor) query.vendor = filters.vendor;
   if (filters.deviceType) query.deviceType = filters.deviceType;
+  if (filters.site) query.site = filters.site;
+  if (filters.location) query.location = filters.location;
   if (filters.reachable === 'true') query['status.reachable'] = true;
   if (filters.reachable === 'false') query['status.reachable'] = false;
   return query;
+}
+
+export function buildMonitoringSnapshot(devices = []) {
+  const onlineDevices = [];
+  const offlineDevices = [];
+  const counts = new Map();
+
+  for (const device of devices) {
+    const vendor = String(device.vendor || 'unknown');
+    counts.set(vendor, (counts.get(vendor) || 0) + 1);
+
+    const normalized = {
+      ...device,
+      status: device.status || {},
+      credential: device.credential || null,
+      location: device.location || '',
+    };
+
+    if (normalized.status.reachable) onlineDevices.push(normalized);
+    else offlineDevices.push(normalized);
+  }
+
+  return {
+    total: devices.length,
+    online: onlineDevices.length,
+    offline: offlineDevices.length,
+    onlineDevices,
+    offlineDevices,
+    byVendor: Array.from(counts.entries()).map(([vendor, count]) => ({ vendor, count })),
+  };
 }
 
 export async function listDevices(filters = {}) {
@@ -51,6 +83,14 @@ export async function listAllDevices() {
     .select('name host vendor deviceType protocol driver status.reachable credential')
     .populate('credential', 'name username')
     .sort({ name: 1 });
+}
+
+export async function listMonitoring() {
+  const devices = await Device.find()
+    .populate('credential', 'name username')
+    .sort({ name: 1 });
+
+  return buildMonitoringSnapshot(devices);
 }
 
 export async function getDevice(id, { withCredential = false } = {}) {

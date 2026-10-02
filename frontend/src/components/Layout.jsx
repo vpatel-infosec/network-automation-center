@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext.jsx';
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: '▦', end: true },
   { to: '/devices', label: 'Devices', icon: '▤' },
+  { to: '/sites', label: 'Sites', icon: '⌂' },
+  { to: '/monitoring', label: 'Monitoring', icon: '◉' },
   { to: '/topology', label: 'Topology', icon: '⌁' },
   { to: '/configs', label: 'Configurations', icon: '≣' },
   { to: '/templates', label: 'Templates', icon: '⌘' },

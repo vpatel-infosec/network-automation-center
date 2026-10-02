@@ -6,6 +6,8 @@ import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Devices from './pages/Devices.jsx';
 import DeviceDetail from './pages/DeviceDetail.jsx';
+import Monitoring from './pages/Monitoring.jsx';
+import Sites from './pages/Sites.jsx';
 import Configurations from './pages/Configurations.jsx';
 import Templates from './pages/Templates.jsx';
 import Jobs from './pages/Jobs.jsx';
@@ -38,6 +40,8 @@ export default function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/devices" element={<Devices />} />
         <Route path="/devices/:id" element={<DeviceDetail />} />
+        <Route path="/sites" element={<Sites />} />
+        <Route path="/monitoring" element={<Monitoring />} />
         <Route path="/topology" element={<Topology />} />
         <Route path="/configs" element={<Configurations />} />
         <Route path="/templates" element={<Templates />} />

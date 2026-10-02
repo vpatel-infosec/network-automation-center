@@ -13,6 +13,7 @@ import scheduleRoutes from './scheduleRoutes.js';
 import dashboardRoutes from './dashboardRoutes.js';
 import auditRoutes from './auditRoutes.js';
 import topologyRoutes from './topologyRoutes.js';
+import siteRoutes from './siteRoutes.js';
 
 const router = Router();
 
@@ -30,6 +31,7 @@ router.use('/schedules', requireAuth, scheduleRoutes);
 router.use('/dashboard', requireAuth, dashboardRoutes);
 router.use('/audit', requireAuth, auditRoutes);
 router.use('/topology', requireAuth, topologyRoutes);
+router.use('/sites', requireAuth, siteRoutes);
 router.get('/meta', requireAuth, asyncHandler(meta));
 
 export default router;

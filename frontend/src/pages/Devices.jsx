@@ -6,6 +6,7 @@ import {
   ConfirmDialog,
   Dot,
   EmptyState,
+  Modal,
   Pagination,
   Spinner,
   StatusBadge,
@@ -16,6 +17,202 @@ import {
 import DeviceForm from './DeviceForm.jsx';
 
 const PAGE_SIZE = 25;
+const TEMPLATE_COLUMNS = [
+  'name', 'host', 'port', 'vendor', 'deviceType', 'protocol', 'driver', 'credential',
+  'model', 'platform', 'osVersion', 'site', 'location', 'tags', 'notes',
+];
+
+async function downloadDeviceTemplate(meta, credentials) {
+  const writeExcelFile = (await import('write-excel-file/browser')).default;
+  const devices = [TEMPLATE_COLUMNS.map((value) => ({ value, fontWeight: 'bold' }))];
+
+  const referenceRows = [
+    [{ value: 'Field', fontWeight: 'bold' }, { value: 'Allowed values', fontWeight: 'bold' }],
+    ['vendor', (meta?.vendors || []).join(', ')],
+    ['deviceType', (meta?.deviceTypes || []).join(', ')],
+    ['protocol', (meta?.protocols || []).join(', ')],
+    ['driver', (meta?.drivers || []).join(', ')],
+    ['credential', credentials.map((credential) => credential.name).join(', ')],
+    ['site', (meta?.sites || []).join(', ')],
+    ['tags', 'Separate multiple tags with commas'],
+  ];
+  const blob = await writeExcelFile([
+    { data: devices, sheet: 'Devices' },
+    { data: referenceRows, sheet: 'Reference' },
+  ]).toBlob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'device-import-template.xlsx';
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function normalizeExcelRows(rows, credentials, meta) {
+  const credentialByName = new Map(credentials.map((credential) => [credential.name.trim().toLowerCase(), credential._id]));
+  const vendors = new Set(meta?.vendors || []);
+  const deviceTypes = new Set(meta?.deviceTypes || []);
+  const protocols = new Set(meta?.protocols || []);
+  const drivers = new Set(meta?.drivers || []);
+
+  return rows.map((source, index) => {
+    const row = Object.fromEntries(
+      Object.entries(source).map(([key, value]) => [String(key).trim().toLowerCase(), value])
+    );
+    const text = (key) => String(row[key] ?? '').trim();
+    const vendor = text('vendor').toLowerCase();
+    const deviceType = text('devicetype').toLowerCase().replace(/[ -]+/g, '_');
+    const protocol = (text('protocol') || 'ssh').toLowerCase();
+    const driver = (text('driver') || 'auto').toLowerCase();
+    const credentialLabel = text('credential');
+    const credential = credentialByName.get(credentialLabel.toLowerCase()) || credentialLabel;
+    const tags = Array.isArray(row.tags)
+      ? row.tags.map((tag) => String(tag).trim()).filter(Boolean)
+      : text('tags').split(',').map((tag) => tag.trim()).filter(Boolean);
+    const payload = {
+      name: text('name'),
+      host: text('host'),
+      vendor,
+      deviceType,
+      protocol,
+      driver,
+      credential,
+      model: text('model'),
+      platform: text('platform'),
+      osVersion: text('osversion'),
+      site: text('site'),
+      location: text('location'),
+      tags,
+      notes: text('notes'),
+    };
+    const port = text('port');
+    if (port) payload.port = Number(port);
+
+    const errors = [];
+    if (!payload.name) errors.push('Name is required');
+    if (!payload.host) errors.push('Host is required');
+    if (!vendors.has(vendor)) errors.push(`Vendor must be one of: ${[...vendors].join(', ')}`);
+    if (!deviceTypes.has(deviceType)) errors.push(`Device type must be one of: ${[...deviceTypes].join(', ')}`);
+    if (!protocols.has(protocol)) errors.push(`Protocol must be one of: ${[...protocols].join(', ')}`);
+    if (!drivers.has(driver)) errors.push(`Driver must be one of: ${[...drivers].join(', ')}`);
+    if (!credentialByName.has(credentialLabel.toLowerCase()) && !/^[0-9a-f]{24}$/i.test(credentialLabel)) {
+      errors.push('Credential must match a credential name in the Reference sheet');
+    }
+    if (port && (!Number.isInteger(payload.port) || payload.port < 1 || payload.port > 65535)) {
+      errors.push('Port must be a number from 1 to 65535');
+    }
+    return { row: Number(row.__row) || index + 2, payload, errors };
+  });
+}
+
+function BulkDeviceImport({ meta, credentials, onClose, onImported }) {
+  const toast = useToast();
+  const [rows, setRows] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [summary, setSummary] = useState(null);
+
+  const readWorkbook = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setSummary(null);
+    try {
+      const readExcelFile = (await import('read-excel-file/browser')).default;
+      const sheets = await readExcelFile(file);
+      const sheet = sheets.find((item) => item.sheet === 'Devices') || sheets[0];
+      if (!sheet) throw new Error('The workbook has no device worksheet.');
+      const [headerRow, ...dataRows] = sheet.data;
+      const headers = (headerRow || []).map((value) => String(value ?? '').trim());
+      const parsed = dataRows.flatMap((values, index) => {
+        const source = Object.fromEntries(headers.map((header, columnIndex) => [header, values[columnIndex] ?? '']));
+        if (!Object.values(source).some((value) => String(value ?? '').trim())) return [];
+        source.__row = index + 2;
+        return [source];
+      });
+      if (!parsed.length) throw new Error('The Devices sheet has no device rows.');
+      if (parsed.length > 200) throw new Error('Import is limited to 200 devices per batch.');
+      setRows(normalizeExcelRows(parsed, credentials, meta));
+    } catch (error) {
+      setRows([]);
+      toast.error(error.message || 'Could not read this Excel file.');
+    }
+  };
+
+  const submit = async () => {
+    const validRows = rows.filter((row) => row.errors.length === 0);
+    if (!validRows.length) return;
+    setBusy(true);
+    try {
+      const { data } = await api.post('/devices/bulk', {
+        rows: validRows.map((row) => ({ ...row.payload, _row: row.row })),
+      });
+      setSummary(data);
+      toast.success(`${data.created} device(s) imported${data.failed ? `, ${data.failed} failed` : ''}`);
+      if (data.created) onImported();
+    } catch (error) {
+      toast.error(apiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resultByRow = new Map((summary?.results || []).map((result) => [result.row, result]));
+  const invalidCount = rows.filter((row) => row.errors.length > 0).length;
+  const failureCount = (summary?.failed || 0) + invalidCount;
+
+  return (
+    <Modal
+      title="Import devices from Excel"
+      subtitle="Use the template so each device row matches the required fields. Existing devices are not overwritten."
+      onClose={onClose}
+      wide
+      footer={
+        <>
+          <button type="button" className="btn ghost" onClick={onClose} disabled={busy}>Close</button>
+          <button type="button" className="btn primary" onClick={submit} disabled={busy || !rows.some((row) => !row.errors.length)}>
+            {busy ? 'Importing...' : `Import ${rows.filter((row) => !row.errors.length).length} valid device(s)`}
+          </button>
+        </>
+      }
+    >
+      <div className="stack">
+        <label className="field">
+          <span className="field-label">Excel workbook (.xlsx)</span>
+          <input className="input" type="file" accept=".xlsx" onChange={readWorkbook} />
+        </label>
+        {rows.length ? (
+          <>
+            <p className="muted small">
+              {rows.length} row(s) loaded · {rows.length - invalidCount} ready · {failureCount} with issues
+              {summary ? ` · ${summary.created} added` : ''}
+            </p>
+            <div className="table-wrap">
+              <table className="table">
+                <thead><tr><th>Excel row</th><th>Name</th><th>Host</th><th>Site</th><th>Result</th></tr></thead>
+                <tbody>
+                  {rows.map((row) => {
+                    const result = resultByRow.get(row.row);
+                    const messages = [...row.errors, ...(result?.error ? [result.error] : [])];
+                    return (
+                      <tr key={row.row}>
+                        <td>{row.row}</td>
+                        <td>{row.payload.name || '—'}</td>
+                        <td>{row.payload.host || '—'}</td>
+                        <td>{row.payload.site || '—'}</td>
+                        <td className={messages.length ? 'text-danger' : 'muted small'}>
+                          {result?.success ? 'Added' : messages.join('; ') || (summary ? 'Not submitted' : 'Ready')}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : null}
+      </div>
+    </Modal>
+  );
+}
 
 export default function Devices() {
   const { canOperate, isAdmin } = useAuth();
@@ -31,8 +228,9 @@ export default function Devices() {
   const [busyId, setBusyId] = useState('');
   const [editing, setEditing] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [deleting, setDeleting] = useState(null);
-  const [filters, setFilters] = useState({ q: '', vendor: '', deviceType: '', reachable: '' });
+  const [filters, setFilters] = useState({ q: '', vendor: '', deviceType: '', site: '', location: '', reachable: '' });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -41,6 +239,8 @@ export default function Devices() {
       if (filters.q) params.q = filters.q;
       if (filters.vendor) params.vendor = filters.vendor;
       if (filters.deviceType) params.deviceType = filters.deviceType;
+      if (filters.site) params.site = filters.site;
+      if (filters.location) params.location = filters.location;
       if (filters.reachable) params.reachable = filters.reachable;
       const response = await api.get('/devices', { params });
       setDevices(response.data.items);
@@ -147,6 +347,12 @@ export default function Devices() {
             <button type="button" className="btn ghost" onClick={backupAll}>
               Backup all
             </button>
+            <button type="button" className="btn ghost" onClick={() => downloadDeviceTemplate(meta, credentials)} disabled={!meta}>
+              Download Excel template
+            </button>
+            <button type="button" className="btn ghost" onClick={() => setImporting(true)} disabled={!meta}>
+              Import Excel
+            </button>
             <button type="button" className="btn primary" onClick={() => setCreating(true)} disabled={!meta}>
               + Add device
             </button>
@@ -192,6 +398,36 @@ export default function Devices() {
             {(meta?.deviceTypes || []).map((type) => (
               <option key={type} value={type}>
                 {titleCase(type)}
+              </option>
+            ))}
+          </select>
+          <select
+            className="input"
+            value={filters.site}
+            onChange={(event) => {
+              setPage(1);
+              setFilters((current) => ({ ...current, site: event.target.value }));
+            }}
+          >
+            <option value="">All sites</option>
+            {(meta?.sites || []).map((site) => (
+              <option key={site} value={site}>
+                {site}
+              </option>
+            ))}
+          </select>
+          <select
+            className="input"
+            value={filters.location}
+            onChange={(event) => {
+              setPage(1);
+              setFilters((current) => ({ ...current, location: event.target.value }));
+            }}
+          >
+            <option value="">All locations</option>
+            {(meta?.locations || []).map((location) => (
+              <option key={location} value={location}>
+                {location}
               </option>
             ))}
           </select>
@@ -246,6 +482,7 @@ export default function Devices() {
                       </Link>
                       <span className="muted small block">
                         {device.host}
+                        {device.site ? ` · ${device.site}` : ''}
                         {device.location ? ` · ${device.location}` : ''}
                       </span>
                     </td>
@@ -313,6 +550,15 @@ export default function Devices() {
             setCreating(false);
             load();
           }}
+        />
+      ) : null}
+
+      {importing && meta ? (
+        <BulkDeviceImport
+          meta={meta}
+          credentials={credentials}
+          onClose={() => setImporting(false)}
+          onImported={load}
         />
       ) : null}
 

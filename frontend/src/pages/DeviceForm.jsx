@@ -13,6 +13,7 @@ const EMPTY_FORM = {
   credential: '',
   model: '',
   platform: '',
+  site: '',
   location: '',
   tags: '',
 };
@@ -43,7 +44,8 @@ export default function DeviceForm({ meta, credentials, initial, onClose, onSave
         credential: form.credential,
         model: form.model,
         platform: form.platform,
-        location: form.location,
+        site: form.site.trim(),
+        location: form.location.trim(),
         tags: form.tags
           .split(',')
           .map((tag) => tag.trim())
@@ -142,8 +144,24 @@ export default function DeviceForm({ meta, credentials, initial, onClose, onSave
         <Field label="Platform / OS">
           <input className="input" value={form.platform} onChange={update('platform')} placeholder="IOS-XE" />
         </Field>
+        <Field label="Site">
+          <>
+            <input
+              className="input"
+              list="site-options"
+              value={form.site}
+              onChange={update('site')}
+              placeholder="HQ / Branch-2 / DC-01"
+            />
+            <datalist id="site-options">
+              {(meta?.sites || []).map((site) => (
+                <option key={site} value={site} />
+              ))}
+            </datalist>
+          </>
+        </Field>
         <Field label="Location">
-          <input className="input" value={form.location} onChange={update('location')} placeholder="HQ / Floor 1 / Rack A2" />
+          <input className="input" value={form.location} onChange={update('location')} placeholder="Floor 1 / Rack A2 / Room 104" />
         </Field>
         <Field label="Tags" hint="Comma separated: core, production, building-a">
           <input className="input" value={form.tags} onChange={update('tags')} />
