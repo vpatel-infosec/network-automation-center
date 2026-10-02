@@ -26,6 +26,8 @@ discovery, scheduled automation, and audit history into one place.
 | Capability | What it provides |
 | --- | --- |
 | Device inventory | Searchable multi-vendor inventory, connection tests, and per-device command overrides |
+| Sites and monitoring | Organize devices by site and location; review online/offline reachability and device health |
+| Bulk device import | Download an Excel template, preview rows, and import up to 200 devices per batch |
 | Configuration control | Backups, meaningful version history, diffs, templates, and operator-triggered restore/push workflows |
 | Network topology | Verify targets and discover links using CDP and LLDP; combine results when both protocols are available |
 | Operations | Concurrent jobs, live progress, cancellation, cron schedules, dashboard metrics, and audit events |
@@ -68,6 +70,25 @@ can reach device management addresses and required SSH or HTTPS ports.
 - Store vendor, model, location, tags, and device-specific CLI command overrides.
 - Test connectivity, report latency, identify drivers, and record reachability.
 - Encrypt device passwords, enable passwords, and SSH key material before storage.
+
+### Sites, monitoring, and bulk import
+
+- Create and manage named sites with an optional code, region, address,
+  description, and active status. Assign devices to a site and location, then
+  filter the inventory by either value.
+- Use Monitoring to review reachable (online) and unreachable (offline) devices.
+  Reachability is updated by device connection tests; adding a device does not
+  test its connection automatically.
+- On the Devices page, choose **Download Excel template** to get an `.xlsx`
+  workbook with a `Devices` sheet and a `Reference` sheet of allowed values.
+  Fill one device per row on `Devices`, then choose **Import Excel** to preview
+  and import it. The importer accepts up to 200 rows per batch and reports
+  validation or creation failures per row; valid rows can still be added.
+- Required spreadsheet columns are `name`, `host`, `vendor`, `deviceType`, and
+  `credential`. The `credential` value must match an existing credential name.
+  Optional columns include `port`, `protocol`, `driver`, `model`, `platform`,
+  `osVersion`, `site`, `location`, `tags`, and `notes`. Separate multiple tags
+  with commas. The importer does not create credentials or overwrite devices.
 
 ### Configuration lifecycle
 
@@ -243,7 +264,8 @@ for login, registration during setup, setup status, and health checks.
 | Area | Common endpoints |
 | --- | --- |
 | Authentication | `POST /api/auth/login`, `POST /api/auth/register`, `GET /api/auth/setup-status` |
-| Devices | `GET/POST /api/devices`, `GET/PATCH/DELETE /api/devices/:id`, `POST /api/devices/:id/test`, `POST /api/devices/:id/backup` |
+| Devices | `GET/POST /api/devices`, `POST /api/devices/bulk`, `GET/PATCH/DELETE /api/devices/:id`, `POST /api/devices/:id/test`, `POST /api/devices/:id/backup`, `GET /api/devices/monitoring` |
+| Sites | `GET/POST /api/sites`, `PATCH/DELETE /api/sites/:id` |
 | Topology | `POST /api/topology/verify`, `POST /api/topology/build` |
 | Credentials | `/api/credentials` and `/api/credentials/:id` |
 | Configurations | `/api/configs`, `/api/configs/:id`, `/api/configs/diff`, `POST /api/configs/:id/restore` |
