@@ -1,4 +1,4 @@
-import { discoverTopology, verifyTopologyTargets, buildTopologyFromTargets } from '../services/topologyService.js';
+import { discoverTopology, verifyTopologyTargets, buildTopologyFromTargets, clearSavedTopology, listSavedTopology, saveTopologyGraph } from '../services/topologyService.js';
 
 export async function getTopology(req, res) {
   const deviceIds = Array.isArray(req.query.deviceIds)
@@ -34,4 +34,24 @@ export async function buildTopology(req, res) {
   res.json(result);
 }
 
-export default { getTopology, verifyTopology, buildTopology };
+export async function clearTopology(req, res) {
+  const name = req.query?.name || req.body?.name || '';
+  res.json(await clearSavedTopology(name));
+}
+
+export async function saveTopology(req, res) {
+  const name = String(req.body?.name || '').trim();
+  if (!name) {
+    throw new Error('A topology name is required to save the graph.');
+  }
+
+  const graph = req.body?.graph || { nodes: [], links: [], protocols: [] };
+  const saved = await saveTopologyGraph(graph, 'manual', name);
+  res.json(saved);
+}
+
+export async function getSavedTopology(req, res) {
+  res.json(await listSavedTopology());
+}
+
+export default { getTopology, verifyTopology, buildTopology, clearTopology, saveTopology, getSavedTopology };

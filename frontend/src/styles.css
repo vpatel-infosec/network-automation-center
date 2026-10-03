@@ -119,7 +119,9 @@ code.inline {
   border-color: #1e3a5f;
   color: #dbeafe;
 }
-.nav-icon { width: 18px; text-align: center; opacity: 0.9; }
+.nav-icon { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; text-align: center; opacity: 0.9; flex-shrink: 0; }
+.nav-icon svg { width: 16px; height: 16px; display: block; }
+.topology-nav-icon { color: currentColor; }
 
 .sidebar-foot {
   border-top: 1px solid var(--line-soft);

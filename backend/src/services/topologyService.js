@@ -1,6 +1,7 @@
 import os from 'node:os';
 import Device from '../models/Device.js';
 import Credential from '../models/Credential.js';
+import Topology from '../models/Topology.js';
 import { withDeviceSession, plainCredential } from './deviceConnection.js';
 import { SshConnection, enterEnableMode } from './ssh.js';
 import { decrypt } from '../utils/crypto.js';
@@ -13,16 +14,21 @@ function pushNeighbor(list, current, protocol) {
   if (!current || !current.device || !current.remoteDevice || !current.localInterface || !current.remoteInterface) {
     return;
   }
-  list.push({
+  const neighbor = {
     device: String(current.device).trim(),
     remoteDevice: String(current.remoteDevice).trim(),
     localInterface: normalizeInterface(current.localInterface),
     remoteInterface: normalizeInterface(current.remoteInterface),
     protocol,
-  });
+  };
+
+  if (current.deviceIp) neighbor.deviceIp = String(current.deviceIp).trim();
+  if (current.remoteIp) neighbor.remoteIp = String(current.remoteIp).trim();
+
+  list.push(neighbor);
 }
 
-export function parseCdpNeighbors(output, deviceName = '') {
+export function parseCdpNeighbors(output, deviceName = '', deviceIp = '') {
   const neighbors = [];
   let current = null;
   const lines = String(output ?? '').split(/\r?\n/);
@@ -34,11 +40,24 @@ export function parseCdpNeighbors(output, deviceName = '') {
     const deviceMatch = line.match(/^Device ID:\s*(.+)$/i);
     if (deviceMatch) {
       pushNeighbor(neighbors, current, 'cdp');
-      current = { device: deviceName, remoteDevice: deviceMatch[1].trim(), localInterface: '', remoteInterface: '' };
+      current = {
+        device: deviceName,
+        deviceIp,
+        remoteDevice: deviceMatch[1].trim(),
+        remoteIp: '',
+        localInterface: '',
+        remoteInterface: '',
+      };
       continue;
     }
 
     if (!current) continue;
+
+    const ipMatch = line.match(/^IP address:\s*(\d+\.\d+\.\d+\.\d+)$/i) || line.match(/^Mgmt address:\s*(\d+\.\d+\.\d+\.\d+)$/i) || line.match(/^Management address:\s*(\d+\.\d+\.\d+\.\d+)$/i);
+    if (ipMatch && !current.remoteIp) {
+      current.remoteIp = ipMatch[1].trim();
+      continue;
+    }
 
     const interfaceMatch = line.match(/^Interface:\s*(.+?),\s*Port ID \(outgoing port\):\s*(.+)$/i);
     if (interfaceMatch) {
@@ -64,7 +83,7 @@ export function parseCdpNeighbors(output, deviceName = '') {
   return neighbors.filter((neighbor) => neighbor.remoteDevice && neighbor.localInterface && neighbor.remoteInterface);
 }
 
-export function parseLldpNeighbors(output, deviceName = '') {
+export function parseLldpNeighbors(output, deviceName = '', deviceIp = '') {
   const neighbors = [];
   let current = null;
   const lines = String(output ?? '').split(/\r?\n/);
@@ -76,11 +95,24 @@ export function parseLldpNeighbors(output, deviceName = '') {
     const localMatch = line.match(/^Local\s+Intf(?:ace)?\s*:\s*(.+)$/i);
     if (localMatch) {
       pushNeighbor(neighbors, current, 'lldp');
-      current = { device: deviceName, remoteDevice: '', localInterface: localMatch[1].trim(), remoteInterface: '' };
+      current = {
+        device: deviceName,
+        deviceIp,
+        remoteDevice: '',
+        remoteIp: '',
+        localInterface: localMatch[1].trim(),
+        remoteInterface: '',
+      };
       continue;
     }
 
     if (!current) continue;
+
+    const ipMatch = line.match(/^Management Address\s*:\s*(\d+\.\d+\.\d+\.\d+)$/i) || line.match(/^Mgmt address\s*:\s*(\d+\.\d+\.\d+\.\d+)$/i) || line.match(/^IP address\s*:\s*(\d+\.\d+\.\d+\.\d+)$/i);
+    if (ipMatch && !current.remoteIp) {
+      current.remoteIp = ipMatch[1].trim();
+      continue;
+    }
 
     const deviceMatch = line.match(/^System Name\s*:\s*(.+)$/i) || line.match(/^Device ID\s*:\s*(.+)$/i) || line.match(/^Chassis id\s*:\s*(.+)$/i);
     if (deviceMatch) {
@@ -108,16 +140,52 @@ export function buildTopologyGraph(devices = [], neighbors = []) {
   const nodes = new Map();
   const links = new Map();
 
+  const ensureNode = (name, details = {}) => {
+    const id = String(name || details.label || '').trim();
+    if (!id) return null;
+    const key = normalizeName(id);
+    const existing = nodes.get(key) || {
+      id,
+      label: id,
+      host: '',
+      ipAddress: '',
+      vendor: 'generic',
+      deviceType: 'other',
+      reachable: false,
+      ports: [],
+    };
+
+    const next = {
+      ...existing,
+      ...details,
+      id: id,
+      label: details.label || existing.label || id,
+      host: details.host || existing.host || '',
+      ipAddress: details.ipAddress || existing.ipAddress || '',
+      vendor: details.vendor || existing.vendor || 'generic',
+      deviceType: details.deviceType || existing.deviceType || 'other',
+      reachable: details.reachable ?? existing.reachable ?? false,
+      ports: Array.from(new Set([...(existing.ports || []), ...(details.ports || [])].filter(Boolean))),
+    };
+
+    nodes.set(key, next);
+    return next;
+  };
+
   for (const device of devices) {
     const id = String(device.name || device.host || device._id).trim();
     if (!id) continue;
-    nodes.set(normalizeName(id), {
+
+    const ipAddress = device.host || device.ipAddress || '';
+    ensureNode(id, {
       id,
       label: device.name || device.host || 'Unknown',
-      host: device.host || '',
+      host: ipAddress,
+      ipAddress,
       vendor: device.vendor || 'generic',
       deviceType: device.deviceType || 'other',
       reachable: Boolean(device.status?.reachable),
+      ports: [],
     });
   }
 
@@ -145,30 +213,54 @@ export function buildTopologyGraph(devices = [], neighbors = []) {
 
     links.set(key, existing);
 
-    nodes.set(normalizeName(sourceName), {
+    const sourceNode = ensureNode(sourceName, {
       id: sourceName,
       label: sourceName,
-      host: '',
+      host: neighbor.deviceIp || '',
+      ipAddress: neighbor.deviceIp || '',
       vendor: 'unknown',
       deviceType: 'other',
       reachable: false,
+      ports: neighbor.localInterface ? [normalizeInterface(neighbor.localInterface)] : [],
     });
 
-    nodes.set(normalizeName(targetName), {
+    const targetNode = ensureNode(targetName, {
       id: targetName,
       label: targetName,
-      host: '',
+      host: neighbor.remoteIp || '',
+      ipAddress: neighbor.remoteIp || '',
       vendor: 'unknown',
       deviceType: 'other',
       reachable: false,
+      ports: neighbor.remoteInterface ? [normalizeInterface(neighbor.remoteInterface)] : [],
     });
+
+    if (sourceNode) {
+      sourceNode.ipAddress = sourceNode.ipAddress || neighbor.deviceIp || '';
+      sourceNode.host = sourceNode.host || neighbor.deviceIp || '';
+      if (neighbor.localInterface) sourceNode.ports = Array.from(new Set([...(sourceNode.ports || []), normalizeInterface(neighbor.localInterface)]));
+    }
+
+    if (targetNode) {
+      targetNode.ipAddress = targetNode.ipAddress || neighbor.remoteIp || '';
+      targetNode.host = targetNode.host || neighbor.remoteIp || '';
+      if (neighbor.remoteInterface) targetNode.ports = Array.from(new Set([...(targetNode.ports || []), normalizeInterface(neighbor.remoteInterface)]));
+    }
   }
 
-  const nodeList = Array.from(nodes.values()).map((node) => ({
-    ...node,
-    id: node.id,
-    color: node.vendor === 'cisco' ? '#38bdf8' : node.vendor === 'aruba' ? '#34d399' : '#a5b4fc',
-  }));
+  const nodeList = Array.from(nodes.values()).map((node) => {
+    const ports = Array.from(new Set((node.ports || []).filter(Boolean))).sort();
+    return {
+      ...node,
+      id: node.id,
+      label: node.label || node.id,
+      hostname: node.label || node.id,
+      ipAddress: node.ipAddress || node.host || '',
+      port: ports[0] || '',
+      ports,
+      color: node.vendor === 'cisco' ? '#38bdf8' : node.vendor === 'aruba' ? '#34d399' : '#a5b4fc',
+    };
+  });
 
   const linkList = Array.from(links.values()).map((link) => {
     const protocols = Array.from(link.protocols).sort();
@@ -340,13 +432,101 @@ export async function buildTopologyFromTargets({ ipAddress = '', ipRange = '', c
     }
   }
 
-  return {
+  const graph = {
     ...verification,
     ...buildTopologyGraph(deviceList, neighbors),
   };
+
+  await saveTopologyGraph(graph, 'build');
+  return graph;
+}
+
+export async function saveTopologyGraph(graph = {}, source = 'build', name = 'Saved topology') {
+  if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.links)) {
+    return null;
+  }
+
+  const normalizedName = String(name || 'Saved topology').trim() || 'Saved topology';
+  const payload = {
+    name: normalizedName,
+    source,
+    generatedAt: graph.generatedAt || new Date().toISOString(),
+    nodes: graph.nodes.map((node) => ({
+      id: String(node.id || node.label || '').trim(),
+      label: node.label || node.hostname || node.id || '',
+      hostname: node.hostname || node.label || node.id || '',
+      host: node.host || node.ipAddress || '',
+      ipAddress: node.ipAddress || node.host || '',
+      vendor: node.vendor || 'generic',
+      deviceType: node.deviceType || 'other',
+      reachable: Boolean(node.reachable),
+      ports: Array.isArray(node.ports) ? node.ports.filter(Boolean) : [node.port].filter(Boolean),
+      port: node.port || (Array.isArray(node.ports) ? node.ports[0] || '' : ''),
+    })),
+    links: graph.links.map((link) => ({
+      id: String(link.id || `${link.sourceDevice}-${link.targetDevice}-${link.localInterface || 'unknown'}-${link.remoteInterface || 'unknown'}`),
+      sourceDevice: String(link.sourceDevice || '').trim(),
+      targetDevice: String(link.targetDevice || '').trim(),
+      localInterface: link.localInterface || '',
+      remoteInterface: link.remoteInterface || '',
+      protocols: Array.isArray(link.protocols) ? link.protocols : [link.protocol || 'unknown'],
+      protocol: link.protocol || (Array.isArray(link.protocols) && link.protocols[0]) || 'unknown',
+    })),
+    protocols: Array.from(new Set((graph.protocols || []).filter(Boolean))).sort(),
+  };
+
+  const saved = await Topology.findOneAndUpdate(
+    { name: normalizedName },
+    { $set: payload },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+
+  return saved.toObject();
+}
+
+export async function listSavedTopology() {
+  const saved = await Topology.find().sort({ generatedAt: -1, updatedAt: -1 }).lean();
+  return saved.map((item) => ({
+    _id: item._id,
+    name: item.name || 'Saved topology',
+    source: item.source || 'saved',
+    generatedAt: item.generatedAt || item.updatedAt || new Date().toISOString(),
+    nodes: item.nodes || [],
+    links: item.links || [],
+    protocols: item.protocols || [],
+  }));
+}
+
+export async function loadSavedTopology() {
+  const saved = await Topology.findOne().sort({ generatedAt: -1, updatedAt: -1 }).lean();
+  if (!saved) {
+    return { nodes: [], links: [], protocols: [], generatedAt: new Date().toISOString() };
+  }
+
+  return {
+    name: saved.name || 'Saved topology',
+    nodes: saved.nodes || [],
+    links: saved.links || [],
+    protocols: saved.protocols || [],
+    generatedAt: saved.generatedAt || saved.updatedAt || new Date().toISOString(),
+    source: saved.source || 'saved',
+  };
+}
+
+export async function clearSavedTopology(name = '') {
+  const filter = name ? { name } : {};
+  await Topology.deleteMany(filter);
+  return { nodes: [], links: [], protocols: [], generatedAt: new Date().toISOString() };
 }
 
 export async function discoverTopology(deviceIds = []) {
+  if (!Array.isArray(deviceIds) || deviceIds.length === 0) {
+    const saved = await loadSavedTopology();
+    if (saved.nodes?.length || saved.links?.length) {
+      return saved;
+    }
+  }
+
   const filters = Array.isArray(deviceIds) && deviceIds.length ? { _id: { $in: deviceIds } } : {};
   const devices = await Device.find(filters).populate('credential', 'name username passwordEnc enablePasswordEnc sshPrivateKeyEnc sshPassphraseEnc').sort({ name: 1 });
 
@@ -375,7 +555,9 @@ export async function discoverTopology(deviceIds = []) {
     }
   }
 
-  return buildTopologyGraph(devices, neighbors);
+  const graph = buildTopologyGraph(devices, neighbors);
+  await saveTopologyGraph(graph, 'discovery');
+  return graph;
 }
 
 export default {
@@ -383,6 +565,7 @@ export default {
   parseLldpNeighbors,
   buildTopologyGraph,
   discoverTopology,
+  clearSavedTopology,
   expandTargetAddresses,
   verifyTopologyTargets,
   buildTopologyFromTargets,

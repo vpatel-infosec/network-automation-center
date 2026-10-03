@@ -22,6 +22,7 @@ Interface: GigabitEthernet2/0/1, Port ID (outgoing port): GigabitEthernet0/1
     {
       device: 'SW1',
       remoteDevice: 'SW2',
+      remoteIp: '10.0.0.2',
       localInterface: 'GigabitEthernet1/0/1',
       remoteInterface: 'GigabitEthernet1/0/2',
       protocol: 'cdp',
@@ -87,4 +88,39 @@ test('buildTopologyGraph merges CDP and LLDP neighbors into a single link when b
   assert.equal(graph.links[0].sourceDevice, 'SW1');
   assert.equal(graph.links[0].targetDevice, 'SW2');
   assert.equal(graph.nodes.length, 2);
+});
+
+test('parseCdpNeighbors keeps host, remote IP and port details available for topology cards', () => {
+  const output = `
+SW1# show cdp neighbors detail
+Device ID: SW2
+Entry address(es):
+  IP address: 10.0.0.2
+Platform: cisco WS-C2960X, Capabilities: Switch
+Interface: GigabitEthernet1/0/1, Port ID (outgoing port): GigabitEthernet1/0/2
+Holdtime : 129 sec
+`;
+
+  const neighbors = parseCdpNeighbors(output, 'SW1', '10.0.0.1');
+  assert.deepEqual(neighbors, [{
+    device: 'SW1',
+    deviceIp: '10.0.0.1',
+    remoteDevice: 'SW2',
+    remoteIp: '10.0.0.2',
+    localInterface: 'GigabitEthernet1/0/1',
+    remoteInterface: 'GigabitEthernet1/0/2',
+    protocol: 'cdp',
+  }]);
+
+  const graph = buildTopologyGraph(
+    [{ _id: '1', name: 'SW1', host: '10.0.0.1', vendor: 'cisco', deviceType: 'switch' }, { _id: '2', name: 'SW2', host: '10.0.0.2', vendor: 'cisco', deviceType: 'switch' }],
+    neighbors
+  );
+
+  const sw1 = graph.nodes.find((node) => node.label === 'SW1');
+  const sw2 = graph.nodes.find((node) => node.label === 'SW2');
+  assert.equal(sw1.ipAddress, '10.0.0.1');
+  assert.deepEqual(sw1.ports, ['GigabitEthernet1/0/1']);
+  assert.equal(sw2.ipAddress, '10.0.0.2');
+  assert.deepEqual(sw2.ports, ['GigabitEthernet1/0/2']);
 });

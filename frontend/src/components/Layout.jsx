@@ -2,12 +2,26 @@ import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 
+const TopologyNavIcon = () => (
+  <svg viewBox="0 0 18 18" className="topology-nav-icon" aria-hidden="true">
+    <g fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 9V3M9 9l-4 3m4-3 4 3M9 9l-3 5m3-5 3 5M3 5h12M3 13h12" />
+      <circle cx="9" cy="9" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="3" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="5" cy="12" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="13" cy="12" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="6" cy="15" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="15" r="1.2" fill="currentColor" stroke="none" />
+    </g>
+  </svg>
+);
+
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: '▦', end: true },
   { to: '/devices', label: 'Devices', icon: '▤' },
   { to: '/sites', label: 'Sites', icon: '⌂' },
   { to: '/monitoring', label: 'Monitoring', icon: '◉' },
-  { to: '/topology', label: 'Topology', icon: '⌁' },
+  { to: '/topology', label: 'Topology', icon: <TopologyNavIcon /> },
   { to: '/configs', label: 'Configurations', icon: '≣' },
   { to: '/templates', label: 'Templates', icon: '⌘' },
   { to: '/jobs', label: 'Automation jobs', icon: '▶' },
