@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import ReportActions from './ReportActions.jsx';
 
 const TopologyNavIcon = () => (
   <svg viewBox="0 0 18 18" className="topology-nav-icon" aria-hidden="true">
@@ -22,10 +23,9 @@ const NAV_ITEMS = [
   { to: '/sites', label: 'Sites', icon: '⌂' },
   { to: '/monitoring', label: 'Monitoring', icon: '◉' },
   { to: '/topology', label: 'Topology', icon: <TopologyNavIcon /> },
-  { to: '/configs', label: 'Configurations', icon: '≣' },
+  { to: '/backups', label: 'Backups', icon: '≣' },
   { to: '/templates', label: 'Templates', icon: '⌘' },
   { to: '/jobs', label: 'Automation jobs', icon: '▶' },
-  { to: '/schedules', label: 'Schedules', icon: '⏱' },
   { to: '/credentials', label: 'Credentials', icon: '⚿' },
   { to: '/users', label: 'Users', icon: '☗', adminOnly: true },
   { to: '/audit', label: 'Audit log', icon: '▣', operatorOnly: true },
@@ -89,6 +89,7 @@ export default function Layout() {
           <button type="button" className="icon-btn menu-btn" onClick={() => setOpen((value) => !value)}>
             ☰
           </button>
+          <ReportActions />
           <span className={`badge ${user?.role === 'admin' ? 'badge-info' : 'badge-muted'}`}>{user?.role}</span>
         </header>
         <div className="page">

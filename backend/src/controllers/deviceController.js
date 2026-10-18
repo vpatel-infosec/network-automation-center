@@ -7,9 +7,11 @@ import {
   updateDevice,
   deleteDevice,
   testConnection,
+  testAllConnections,
 } from '../services/deviceService.js';
 import { backupDevice } from '../services/backupService.js';
 import { deviceSchema } from '../utils/deviceValidation.js';
+import { searchMacInSite, assignVlan } from '../services/macVlanService.js';
 
 export async function list(req, res) {
   res.json(await listDevices(req.query));
@@ -22,6 +24,10 @@ export async function listAll(req, res) {
 
 export async function monitoring(req, res) {
   res.json(await listMonitoring());
+}
+
+export async function checkAll(req, res) {
+  res.json(await testAllConnections(req.user, req.body?.deviceIds));
 }
 
 export async function get(req, res) {
@@ -85,4 +91,12 @@ export async function backupNow(req, res) {
   res.json(result);
 }
 
-export default { list, listAll, monitoring, get, create, bulkCreate, update, remove, test, backupNow };
+export async function searchMacVlan(req, res) {
+  res.json(await searchMacInSite(req.body.site, req.body.macAddress));
+}
+
+export async function assignMacVlan(req, res) {
+  res.json(await assignVlan(req.body, req.user));
+}
+
+export default { list, listAll, monitoring, checkAll, get, create, bulkCreate, update, remove, test, backupNow, searchMacVlan, assignMacVlan };

@@ -14,6 +14,7 @@ const ciscoIos = {
     identify: ['show version'],
     disablePaging: ['terminal length 0'],
     backup: ['show running-config'],
+    startupBackup: ['show startup-config'],
     enterConfig: ['configure terminal'],
     exitConfig: ['end'],
     save: ['write memory'],

@@ -10,6 +10,7 @@ import {
 } from '../services/templateService.js';
 import { createJob, startJob } from '../services/jobService.js';
 import { audit } from '../services/auditService.js';
+import { previewSiteVlan } from '../services/siteVlanService.js';
 
 export async function list(req, res) {
   res.json({ items: await listTemplates() });
@@ -70,4 +71,41 @@ export async function push(req, res) {
   res.status(202).json({ job });
 }
 
-export default { list, get, create, update, remove, preview, push };
+export async function previewSiteVlanCreation(req, res) {
+  res.json(await previewSiteVlan(req.body.site, req.body.vlanId, req.body.vlanName));
+}
+
+export async function createSiteVlan(req, res) {
+  const preview = await previewSiteVlan(req.body.site, req.body.vlanId, req.body.vlanName);
+  if (!preview.total) throw new AppError('No switches are assigned to this site', 400);
+  const unsupported = preview.devices.filter((device) => !device.supported);
+  if (unsupported.length) {
+    throw new AppError(
+      `Cannot add the VLAN to every switch until command overrides are configured for: ${unsupported.map((device) => device.name).join(', ')}`,
+      400
+    );
+  }
+
+  const job = await createJob(
+    {
+      type: 'site_vlan',
+      name: `Add VLAN ${preview.vlanId} to ${preview.site}`,
+      deviceIds: preview.devices.map((device) => device.deviceId),
+      variables: { site: preview.site, vlanId: preview.vlanId, vlanName: preview.vlanName },
+      options: { persist: true },
+    },
+    req.user
+  );
+  await audit({
+    user: req.user,
+    action: 'template.site_vlan',
+    entity: 'job',
+    entityId: job._id,
+    details: { site: preview.site, vlanId: preview.vlanId, vlanName: preview.vlanName, switches: preview.total },
+    ip: req.ip,
+  });
+  startJob(job._id);
+  res.status(202).json({ job });
+}
+
+export default { list, get, create, update, remove, preview, push, previewSiteVlanCreation, createSiteVlan };

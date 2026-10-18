@@ -9,9 +9,13 @@ const commandOverridesSchema = z
     disablePaging: z.string().optional().default(''),
     identify: z.string().optional().default(''),
     backup: z.string().optional().default(''),
+    startupBackup: z.string().optional().default(''),
     enterConfig: z.string().optional().default(''),
     exitConfig: z.string().optional().default(''),
     save: z.string().optional().default(''),
+    macLookup: z.string().optional().default(''),
+    vlanAssignment: z.string().optional().default(''),
+    vlanCreate: z.string().optional().default(''),
   })
   .optional();
 

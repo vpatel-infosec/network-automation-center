@@ -246,6 +246,7 @@ export default function Jobs() {
             <option value="backup">Backup</option>
             <option value="command">Command</option>
             <option value="push_template">Template push</option>
+            <option value="site_vlan">Site VLAN creation</option>
             <option value="restore">Restore</option>
           </select>
           <select

@@ -16,4 +16,7 @@ test('server-side modules import cleanly', async () => {
   assert.equal(typeof scheduler.validateCron, 'function');
   assert.ok(scheduler.validateCron('0 2 * * *'));
   assert.equal(scheduler.validateCron('not a cron'), false);
+
+  const routes = await import('../src/routes/index.js');
+  assert.ok(routes.default);
 });

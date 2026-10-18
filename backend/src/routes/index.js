@@ -14,6 +14,7 @@ import dashboardRoutes from './dashboardRoutes.js';
 import auditRoutes from './auditRoutes.js';
 import topologyRoutes from './topologyRoutes.js';
 import siteRoutes from './siteRoutes.js';
+import backupGroupRoutes from './backupGroupRoutes.js';
 
 const router = Router();
 
@@ -32,6 +33,7 @@ router.use('/dashboard', requireAuth, dashboardRoutes);
 router.use('/audit', requireAuth, auditRoutes);
 router.use('/topology', requireAuth, topologyRoutes);
 router.use('/sites', requireAuth, siteRoutes);
+router.use('/backup-groups', requireAuth, backupGroupRoutes);
 router.get('/meta', requireAuth, asyncHandler(meta));
 
 export default router;

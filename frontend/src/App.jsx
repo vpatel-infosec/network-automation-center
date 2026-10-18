@@ -10,6 +10,8 @@ import Monitoring from './pages/Monitoring.jsx';
 import Sites from './pages/Sites.jsx';
 import Configurations from './pages/Configurations.jsx';
 import Templates from './pages/Templates.jsx';
+import MacVlan from './pages/MacVlan.jsx';
+import SiteVlan from './pages/SiteVlan.jsx';
 import Jobs from './pages/Jobs.jsx';
 import Schedules from './pages/Schedules.jsx';
 import Credentials from './pages/Credentials.jsx';
@@ -43,10 +45,14 @@ export default function App() {
         <Route path="/sites" element={<Sites />} />
         <Route path="/monitoring" element={<Monitoring />} />
         <Route path="/topology" element={<Topology />} />
-        <Route path="/configs" element={<Configurations />} />
+        <Route path="/backups" element={<Configurations />} />
+        <Route path="/backups/schedules" element={<Schedules />} />
+        <Route path="/configs" element={<Navigate to="/backups" replace />} />
         <Route path="/templates" element={<Templates />} />
+        <Route path="/templates/site-vlan" element={<Protected operatorOnly><SiteVlan /></Protected>} />
+        <Route path="/templates/mac-vlan" element={<Protected operatorOnly><MacVlan /></Protected>} />
         <Route path="/jobs" element={<Jobs />} />
-        <Route path="/schedules" element={<Schedules />} />
+        <Route path="/schedules" element={<Navigate to="/backups/schedules" replace />} />
         <Route path="/credentials" element={<Credentials />} />
         <Route
           path="/users"

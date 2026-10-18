@@ -519,7 +519,7 @@ export async function clearSavedTopology(name = '') {
   return { nodes: [], links: [], protocols: [], generatedAt: new Date().toISOString() };
 }
 
-export async function discoverTopology(deviceIds = []) {
+export async function discoverTopology(deviceIds = [], snapshotName = 'Saved topology') {
   if (!Array.isArray(deviceIds) || deviceIds.length === 0) {
     const saved = await loadSavedTopology();
     if (saved.nodes?.length || saved.links?.length) {
@@ -556,7 +556,7 @@ export async function discoverTopology(deviceIds = []) {
   }
 
   const graph = buildTopologyGraph(devices, neighbors);
-  await saveTopologyGraph(graph, 'discovery');
+  await saveTopologyGraph(graph, 'discovery', snapshotName);
   return graph;
 }
 

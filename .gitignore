@@ -12,6 +12,7 @@ build/
 
 # Local development database
 .mongo-data/
+backend/backup-storage/
 
 # Runtime logs
 logs/

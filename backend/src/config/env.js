@@ -51,6 +51,17 @@ export const config = {
     .filter(Boolean),
   logLevel: process.env.LOG_LEVEL || (isProd ? 'info' : 'debug'),
   jobConcurrency: Math.max(1, int(process.env.JOB_CONCURRENCY, 5)),
+  backupStorage: {
+    filePath: (process.env.BACKUP_FILE_STORAGE_PATH || '').trim(),
+    s3: {
+      bucket: (process.env.BACKUP_S3_BUCKET || '').trim(),
+      region: (process.env.BACKUP_S3_REGION || 'us-east-1').trim(),
+      endpoint: (process.env.BACKUP_S3_ENDPOINT || '').trim(),
+      accessKeyId: (process.env.BACKUP_S3_ACCESS_KEY_ID || '').trim(),
+      secretAccessKey: process.env.BACKUP_S3_SECRET_ACCESS_KEY || '',
+      forcePathStyle: String(process.env.BACKUP_S3_FORCE_PATH_STYLE || 'false') === 'true',
+    },
+  },
   restconf: {
     verifyTls: String(process.env.RESTCONF_VERIFY_TLS || 'false') === 'true',
   },

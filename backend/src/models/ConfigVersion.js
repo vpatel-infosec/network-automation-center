@@ -10,6 +10,12 @@ const configVersionSchema = new mongoose.Schema(
     device: { type: mongoose.Schema.Types.ObjectId, ref: 'Device', required: true, index: true },
     version: { type: Number, required: true },
     content: { type: String, required: true },
+    startupContent: { type: String, default: '' },
+    startupStatus: { type: String, enum: ['stored', 'unsupported', 'failed'], default: 'unsupported' },
+    startupSize: { type: Number, default: 0 },
+    startupCommand: { type: String, default: '' },
+    startupError: { type: String, default: '' },
+    startupHash: { type: String, default: '' },
     hash: { type: String, required: true, index: true },
     size: { type: Number, default: 0 },
     command: { type: String, default: '' },
@@ -20,6 +26,22 @@ const configVersionSchema = new mongoose.Schema(
       default: 'manual',
     },
     note: { type: String, default: '' },
+    storage: {
+      type: [
+        new mongoose.Schema(
+          {
+            provider: { type: String, enum: ['file_server', 's3'], required: true },
+            key: { type: String, default: '' },
+            startupKey: { type: String, default: '' },
+            status: { type: String, enum: ['stored', 'failed'], required: true },
+            storedAt: { type: Date },
+            error: { type: String, default: '' },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }

@@ -9,6 +9,12 @@ import runPool from '../utils/asyncPool.js';
 import config from '../config/env.js';
 import AppError from '../utils/AppError.js';
 import { audit } from './auditService.js';
+import { mirrorBackupVersion } from './backupStorageService.js';
+import { resolveCommands } from '../drivers/base.js';
+
+function storageSummary(storage = []) {
+  return storage.map((item) => `${item.provider === 'file_server' ? 'file server' : 'cloud'} ${item.status}${item.error ? `: ${item.error}` : ''}`).join(' · ');
+}
 
 /** Load a device together with its (decrypted-ready) credential document. */
 export async function loadDeviceForSession(deviceId) {
@@ -26,10 +32,45 @@ export async function captureConfig(device) {
   if (driver.supportsBackup === false) {
     throw new AppError(`Driver "${driver.id}" does not support configuration backups`, 400);
   }
-  return withDeviceSession(device, device.credential, (session, drv) => drv.backup(session, { device }));
+  return withDeviceSession(device, device.credential, async (session, drv) => {
+    const content = await drv.backup(session, { device });
+    const startupCommands = resolveCommands(device, drv, 'startupBackup');
+    if (!startupCommands.length || typeof drv.runCommands !== 'function') {
+      return { content, startupContent: '', startupStatus: 'unsupported', startupCommand: '', startupError: '' };
+    }
+
+    const results = await drv.runCommands(session, { device }, startupCommands);
+    const failed = results.find((result) => !result.ok);
+    const startupContent = results.filter((result) => result.ok).map((result) => result.output).join('\n').trim();
+    if (failed) {
+      return {
+        content,
+        startupContent: '',
+        startupStatus: 'failed',
+        startupCommand: startupCommands.join('\n'),
+        startupError: failed.error || 'Startup config command failed',
+      };
+    }
+    if (!startupContent) {
+      return {
+        content,
+        startupContent: '',
+        startupStatus: 'failed',
+        startupCommand: startupCommands.join('\n'),
+        startupError: 'Startup config command returned empty output',
+      };
+    }
+    return {
+      content,
+      startupContent,
+      startupStatus: 'stored',
+      startupCommand: startupCommands.join('\n'),
+      startupError: '',
+    };
+  });
 }
 
-async function saveVersion({ device, content, hash, driver, trigger, user, note }) {
+async function saveVersion({ device, content, startup, hash, startupHash, driver, trigger, user, note }) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const latest = await ConfigVersion.findOne({ device: device._id }).sort({ version: -1 }).select('version');
     const nextVersion = (latest?.version || 0) + 1;
@@ -38,7 +79,13 @@ async function saveVersion({ device, content, hash, driver, trigger, user, note 
         device: device._id,
         version: nextVersion,
         content,
+        startupContent: startup.startupContent,
+        startupStatus: startup.startupStatus,
+        startupSize: Buffer.byteLength(startup.startupContent || '', 'utf8'),
+        startupCommand: startup.startupCommand,
+        startupError: startup.startupError,
         hash,
+        startupHash,
         size: Buffer.byteLength(content, 'utf8'),
         command: driver.commands?.backup?.[0] || device.commandOverrides?.backup || '',
         driverId: driver.id,
@@ -63,13 +110,29 @@ export async function backupDevice({ deviceId, user, trigger = 'manual', note = 
   const driver = resolveDriver(device);
 
   try {
-    const content = await captureConfig(device);
+    const captured = await captureConfig(device);
+    const content = captured.content;
+    const startup = {
+      startupContent: captured.startupContent,
+      startupStatus: captured.startupStatus,
+      startupCommand: captured.startupCommand,
+      startupError: captured.startupError,
+    };
     if (!String(content || '').trim()) throw new AppError(`Device ${device.name} returned an empty configuration`, 502);
 
-    const hash = sha256(normalizeForHash(content));
-    const latest = await ConfigVersion.findOne({ device: device._id }).sort({ version: -1 }).select('version hash');
+    const startupHash = startup.startupStatus === 'stored' ? sha256(normalizeForHash(startup.startupContent)) : '';
+    const hash = sha256(`${normalizeForHash(content)}\n--startup:${startup.startupStatus}:${startupHash}`);
+    const latest = await ConfigVersion.findOne({ device: device._id }).sort({ version: -1 });
 
     if (latest && latest.hash === hash) {
+      latest.startupContent = startup.startupContent;
+      latest.startupStatus = startup.startupStatus;
+      latest.startupSize = Buffer.byteLength(startup.startupContent || '', 'utf8');
+      latest.startupCommand = startup.startupCommand;
+      latest.startupError = startup.startupError;
+      latest.startupHash = startupHash;
+      await latest.save();
+      const storage = await mirrorBackupVersion(latest, device);
       device.status.lastBackupAt = new Date();
       device.status.lastBackupStatus = 'unchanged';
       device.status.lastBackupMessage = `No configuration change since v${latest.version}`;
@@ -80,11 +143,13 @@ export async function backupDevice({ deviceId, user, trigger = 'manual', note = 
         status: 'unchanged',
         changed: false,
         version: latest.version,
-        message: `No change (v${latest.version})`,
+        message: `No change (v${latest.version}) · startup ${startup.startupStatus}${startup.startupError ? `: ${startup.startupError}` : ''}${storage.length ? ` · ${storageSummary(storage)}` : ''}`,
+        storage,
       };
     }
 
-    const version = await saveVersion({ device, content, hash, driver, trigger, user, note });
+    const version = await saveVersion({ device, content, startup, hash, startupHash, driver, trigger, user, note });
+    const storage = await mirrorBackupVersion(version, device);
     device.status.lastBackupAt = new Date();
     device.status.lastBackupStatus = 'success';
     device.status.lastBackupMessage = `Stored v${version.version} (${version.size} bytes)`;
@@ -103,7 +168,8 @@ export async function backupDevice({ deviceId, user, trigger = 'manual', note = 
       changed: true,
       version: version.version,
       configVersionId: version._id,
-      message: `Stored v${version.version}`,
+      message: `Stored v${version.version} · startup ${startup.startupStatus}${startup.startupError ? `: ${startup.startupError}` : ''}${storage.length ? ` · ${storageSummary(storage)}` : ''}`,
+      storage,
     };
   } catch (error) {
     device.status.lastBackupAt = new Date();

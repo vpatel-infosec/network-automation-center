@@ -16,6 +16,7 @@ const EMPTY_FORM = {
   site: '',
   location: '',
   tags: '',
+  commandOverrides: {},
 };
 
 export default function DeviceForm({ meta, credentials, initial, onClose, onSaved }) {
@@ -25,6 +26,7 @@ export default function DeviceForm({ meta, credentials, initial, onClose, onSave
     ...(initial || {}),
     credential: initial?.credential?._id || initial?.credential || '',
     tags: (initial?.tags || []).join(', '),
+    commandOverrides: { ...(initial?.commandOverrides || {}) },
   }));
   const [busy, setBusy] = useState(false);
 
@@ -50,6 +52,13 @@ export default function DeviceForm({ meta, credentials, initial, onClose, onSave
           .split(',')
           .map((tag) => tag.trim())
           .filter(Boolean),
+        commandOverrides: {
+          ...form.commandOverrides,
+          startupBackup: form.commandOverrides.startupBackup || '',
+          macLookup: form.commandOverrides.macLookup || '',
+          vlanAssignment: form.commandOverrides.vlanAssignment || '',
+          vlanCreate: form.commandOverrides.vlanCreate || '',
+        },
       };
       if (form.port) payload.port = Number(form.port);
 
@@ -165,6 +174,52 @@ export default function DeviceForm({ meta, credentials, initial, onClose, onSave
         </Field>
         <Field label="Tags" hint="Comma separated: core, production, building-a">
           <input className="input" value={form.tags} onChange={update('tags')} />
+        </Field>
+        <Field label="Startup configuration backup command" className="span-2" hint="Cisco IOS/NX-OS use show startup-config by default. Override for other platforms or leave blank if startup config is unsupported.">
+          <input
+            className="input mono"
+            value={form.commandOverrides.startupBackup || ''}
+            onChange={(event) => setForm((current) => ({
+              ...current,
+              commandOverrides: { ...current.commandOverrides, startupBackup: event.target.value },
+            }))}
+            placeholder="show startup-config"
+          />
+        </Field>
+        <Field label="MAC table lookup command" hint="Optional; use {{mac}} for the searched MAC address">
+          <input
+            className="input mono"
+            value={form.commandOverrides.macLookup || ''}
+            onChange={(event) => setForm((current) => ({
+              ...current,
+              commandOverrides: { ...current.commandOverrides, macLookup: event.target.value },
+            }))}
+            placeholder="show mac address-table address {{mac}}"
+          />
+        </Field>
+        <Field label="VLAN assignment commands" className="span-2" hint="Optional config-mode commands; use {{interface}} and {{vlan}}. Include shutdown and no shutdown if required.">
+          <textarea
+            className="input mono"
+            rows="5"
+            value={form.commandOverrides.vlanAssignment || ''}
+            onChange={(event) => setForm((current) => ({
+              ...current,
+              commandOverrides: { ...current.commandOverrides, vlanAssignment: event.target.value },
+            }))}
+            placeholder={'interface {{interface}}\n shutdown\n switchport access vlan {{vlan}}\n no shutdown'}
+          />
+        </Field>
+        <Field label="VLAN creation commands" className="span-2" hint="Optional config-mode commands for site-wide VLAN creation; use {{vlan}} and {{name}}.">
+          <textarea
+            className="input mono"
+            rows="4"
+            value={form.commandOverrides.vlanCreate || ''}
+            onChange={(event) => setForm((current) => ({
+              ...current,
+              commandOverrides: { ...current.commandOverrides, vlanCreate: event.target.value },
+            }))}
+            placeholder={'vlan {{vlan}}\n name {{name}}'}
+          />
         </Field>
       </form>
     </Modal>

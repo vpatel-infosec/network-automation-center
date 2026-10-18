@@ -14,7 +14,7 @@ COPY src ./src
 COPY scripts ./scripts
 
 # Run as an unprivileged user
-RUN addgroup -S nac && adduser -S nac -G nac && chown -R nac:nac /app
+RUN addgroup -S nac && adduser -S nac -G nac && mkdir -p /var/lib/nac-backups && chown -R nac:nac /app /var/lib/nac-backups
 USER nac
 
 EXPOSE 5000

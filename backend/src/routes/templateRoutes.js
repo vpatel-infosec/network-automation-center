@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { asyncHandler, validateBody } from '../middleware/validate.js';
 import { requireAdmin, requireOperator } from '../middleware/auth.js';
 import { DEVICE_TYPES, VENDORS } from '../models/Device.js';
-import { list, get, create, update, remove, preview, push } from '../controllers/templateController.js';
+import { list, get, create, update, remove, preview, push, previewSiteVlanCreation, createSiteVlan } from '../controllers/templateController.js';
 
 const router = Router();
 
@@ -43,8 +43,15 @@ const pushSchema = z.object({
     })
     .optional(),
 });
+const siteVlanSchema = z.object({
+  site: z.string().trim().min(1),
+  vlanId: z.coerce.number().int().min(1).max(4094),
+  vlanName: z.string().trim().max(32).regex(/^(?:|[A-Za-z_][A-Za-z0-9_.-]*)$/).optional().default(''),
+});
 
 router.get('/', asyncHandler(list));
+router.post('/site-vlan/preview', requireOperator, validateBody(siteVlanSchema), asyncHandler(previewSiteVlanCreation));
+router.post('/site-vlan', requireOperator, validateBody(siteVlanSchema), asyncHandler(createSiteVlan));
 router.post('/', requireOperator, validateBody(templateSchema), asyncHandler(create));
 router.get('/:id', asyncHandler(get));
 router.patch('/:id', requireOperator, validateBody(templateSchema.partial()), asyncHandler(update));

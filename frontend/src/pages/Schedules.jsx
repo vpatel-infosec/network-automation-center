@@ -13,6 +13,7 @@ import {
   useToast,
 } from '../components/ui.jsx';
 import DevicePicker from '../components/DevicePicker.jsx';
+import BackupModuleTabs from '../components/BackupModuleTabs.jsx';
 
 const CRON_PRESETS = [
   { label: 'Every night at 02:00', value: '0 2 * * *' },
@@ -243,7 +244,7 @@ export default function Schedules() {
     <div className="stack">
       <div className="page-head">
         <div>
-          <h2>Schedules</h2>
+          <h2>Backup schedules</h2>
           <p className="muted small">{items.length} schedule(s) · cron driven backups and template pushes</p>
         </div>
         {canOperate ? (
@@ -252,6 +253,8 @@ export default function Schedules() {
           </button>
         ) : null}
       </div>
+
+      <BackupModuleTabs active="schedules" />
 
       <div className="card">
         {loading ? (

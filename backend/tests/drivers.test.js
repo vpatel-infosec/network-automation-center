@@ -56,6 +56,13 @@ test('every SSH driver implements the full interface used by the job runner', ()
   }
 });
 
+test('startup-config capture is built in for Cisco IOS and NX-OS only', () => {
+  assert.deepEqual(drivers.cisco_ios.commands.startupBackup, ['show startup-config']);
+  assert.deepEqual(drivers.cisco_nxos.commands.startupBackup, ['show startup-config']);
+  assert.equal(drivers.aruba_os.commands.startupBackup, undefined);
+  assert.equal(drivers.juniper.commands.startupBackup, undefined);
+});
+
 test('driverCatalog is UI friendly', () => {
   const catalog = driverCatalog();
   assert.equal(catalog.length, 8);

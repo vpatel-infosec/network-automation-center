@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-export const JOB_TYPES = ['backup', 'command', 'push_template', 'restore'];
+export const JOB_TYPES = ['backup', 'command', 'push_template', 'site_vlan', 'restore'];
 export const JOB_STATUSES = ['queued', 'running', 'completed', 'partial', 'failed', 'cancelled'];
 
 const jobResultSchema = new mongoose.Schema(
@@ -29,6 +29,7 @@ const jobSchema = new mongoose.Schema(
     commands: { type: [String], default: [] },
     /** type=push_template: template + variables rendered per device. */
     template: { type: mongoose.Schema.Types.ObjectId, ref: 'Template' },
+    /** type=site_vlan: site and VLAN values rendered per switch. */
     variables: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
     /** type=restore: the stored version that is replayed onto its device. */
     configVersion: { type: mongoose.Schema.Types.ObjectId, ref: 'ConfigVersion' },

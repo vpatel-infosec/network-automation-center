@@ -22,7 +22,7 @@ export async function verifyTopology(req, res) {
 export async function buildTopology(req, res) {
   const deviceIds = Array.isArray(req.body?.deviceIds) ? req.body.deviceIds : [];
   if (deviceIds.length) {
-    res.json(await discoverTopology(deviceIds));
+    res.json(await discoverTopology(deviceIds, req.body?.name || 'Saved topology'));
     return;
   }
 

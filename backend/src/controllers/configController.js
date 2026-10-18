@@ -3,6 +3,7 @@ import AppError from '../utils/AppError.js';
 import { lineDiff, diffSummary, collapseContext } from '../utils/diff.js';
 import { createJob, startJob } from '../services/jobService.js';
 import { audit } from '../services/auditService.js';
+import { getBackupStorageStatus } from '../services/backupStorageService.js';
 
 const clamp = (value, min, max, fallback) => Math.min(max, Math.max(min, Number(value) || fallback));
 
@@ -14,7 +15,7 @@ export async function list(req, res) {
 
   const [items, total] = await Promise.all([
     ConfigVersion.find(query)
-      .select('-content')
+      .select('-content -startupContent')
       .populate('device', 'name host vendor deviceType')
       .populate('createdBy', 'name')
       .sort({ createdAt: -1 })
@@ -32,6 +33,10 @@ export async function get(req, res) {
     .populate('createdBy', 'name');
   if (!version) throw new AppError('Configuration version not found', 404);
   res.json({ version });
+}
+
+export async function storageStatus(req, res) {
+  res.json(getBackupStorageStatus());
 }
 
 /** Line diff between two versions of the same device. */
@@ -90,4 +95,4 @@ export async function remove(req, res) {
   res.json({ success: true });
 }
 
-export default { list, get, diff, restore, remove };
+export default { list, get, storageStatus, diff, restore, remove };

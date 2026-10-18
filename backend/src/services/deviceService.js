@@ -6,6 +6,8 @@ import { withDeviceSession } from './deviceConnection.js';
 import { SECRET_FIELDS } from './credentialService.js';
 import { audit } from './auditService.js';
 import AppError from '../utils/AppError.js';
+import runPool from '../utils/asyncPool.js';
+import config from '../config/env.js';
 
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const shortMessage = (text, max = 300) =>
@@ -170,6 +172,49 @@ export async function testConnection(id, user) {
   }
 }
 
+export async function testAllConnections(user, deviceIds) {
+  const filter = Array.isArray(deviceIds) ? { _id: { $in: deviceIds } } : {};
+  const devices = await Device.find(filter).select('_id name').sort({ name: 1 });
+  const checked = await runPool(devices, config.jobConcurrency, async (device) => {
+    try {
+      const result = await testConnection(device._id, user);
+      return {
+        deviceId: String(device._id),
+        name: device.name,
+        reachable: result.reachable,
+        latencyMs: result.latencyMs,
+        driver: result.driver,
+        error: result.error,
+      };
+    } catch (error) {
+      const checkedAt = new Date();
+      await Device.updateOne(
+        { _id: device._id },
+        {
+          $set: {
+            'status.reachable': false,
+            'status.lastCheckedAt': checkedAt,
+            'status.lastCheckMessage': error.message,
+          },
+        }
+      );
+      await audit({
+        user,
+        action: 'device.test',
+        entity: 'device',
+        entityId: device._id,
+        details: { reachable: false, error: error.message },
+      });
+      return { deviceId: String(device._id), name: device.name, reachable: false, error: error.message };
+    }
+  });
+  const results = checked.map((result, index) => result.status === 'fulfilled'
+    ? result.value
+    : { deviceId: String(devices[index]._id), name: devices[index].name, reachable: false, error: result.reason?.message || 'Live check failed' });
+  const online = results.filter((result) => result.reachable).length;
+  return { total: results.length, online, offline: results.length - online, results };
+}
+
 export default {
   listDevices,
   listAllDevices,
@@ -178,4 +223,5 @@ export default {
   updateDevice,
   deleteDevice,
   testConnection,
+  testAllConnections,
 };

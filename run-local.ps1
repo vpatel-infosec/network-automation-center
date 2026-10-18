@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 
 $backendDir = "D:\Network Automation Center\backend"
 $frontendDir = "D:\Network Automation Center\frontend"
+$env:BACKUP_FILE_STORAGE_PATH = Join-Path $backendDir "backup-storage"
 
 Write-Host "Starting MongoDB for local development..."
 Start-Process powershell -ArgumentList "-NoExit","-Command","cd '$backendDir'; node scripts/devDb.js" -WindowStyle Normal

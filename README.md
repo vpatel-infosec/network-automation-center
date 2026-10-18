@@ -29,6 +29,7 @@ discovery, scheduled automation, and audit history into one place.
 | Sites and monitoring | Organize devices by site and location; review online/offline reachability and device health |
 | Bulk device import | Download an Excel template, preview rows, and import up to 200 devices per batch |
 | Configuration control | Backups, meaningful version history, diffs, templates, and operator-triggered restore/push workflows |
+| Reports and exports | Full-dataset CSV, Excel, and PDF exports from each module; credentials, configuration bodies, and raw audit details are excluded from general reports |
 | Network topology | Verify targets and discover links using CDP and LLDP; combine results when both protocols are available |
 | Operations | Concurrent jobs, live progress, cancellation, cron schedules, dashboard metrics, and audit events |
 | Access control | First-user administrator setup and `admin`, `operator`, and `viewer` roles |
@@ -223,9 +224,39 @@ See `backend/.env.example` and `.env.example` for the templates.
 | `SSH_COMMAND_TIMEOUT_MS` | `60000` | Default device command timeout |
 | `SSH_LONG_COMMAND_TIMEOUT_MS` | `180000` | Timeout for longer operations such as backups |
 | `JOB_CONCURRENCY` | `5` | Maximum devices processed concurrently per job |
+| `BACKUP_FILE_STORAGE_PATH` | `/var/lib/nac-backups` (Compose) | Backend path for mirrored configuration files |
+| `BACKUP_FILE_STORAGE_HOST_PATH` | `backup-files` (Compose) | Named volume or mounted host/file-server path mapped into the backend container |
+| `BACKUP_S3_BUCKET` | Unset | Enables S3-compatible cloud copies when set |
+| `BACKUP_S3_REGION` | `us-east-1` | S3-compatible bucket region |
+| `BACKUP_S3_ENDPOINT` | Unset | Optional custom endpoint for MinIO, R2, or another S3-compatible service |
+| `BACKUP_S3_ACCESS_KEY_ID` | Unset | Optional static S3 access key; otherwise the AWS SDK credential chain is used |
+| `BACKUP_S3_SECRET_ACCESS_KEY` | Unset | Optional static S3 secret key |
+| `BACKUP_S3_FORCE_PATH_STYLE` | `false` | Use path-style S3 requests (automatically enabled for custom endpoints) |
 | `RESTCONF_VERIFY_TLS` | `false` | Whether RESTCONF TLS certificates are verified |
 | `LOG_LEVEL` | `info` | Application log verbosity |
 | `HTTP_PORT` | `8080` (Compose) | Host port for the frontend container |
+
+### Backup storage
+
+The Backups module keeps every configuration version in MongoDB and can mirror
+each snapshot to a mounted file-server directory and an S3-compatible bucket.
+Each version stores `running-config-vN.cfg` and, when supported,
+`startup-config-vN.cfg` in a `<IP>_<device-name>-<device-id>` folder. Cisco
+IOS/NX-OS startup capture uses `show startup-config`; other platforms can set a
+device-specific startup backup command.
+Compose enables the file-server copy by default using the persistent
+`backup-files` volume. To use a mounted server share, set
+`BACKUP_FILE_STORAGE_HOST_PATH` to a host path already mounted by Docker and
+keep `BACKUP_FILE_STORAGE_PATH=/var/lib/nac-backups`. In non-Compose deployments,
+set `BACKUP_FILE_STORAGE_PATH` to the local or mounted share path.
+
+Set `BACKUP_S3_BUCKET` to enable cloud replication. AWS S3 uses the standard
+credential chain by default; static credentials can be supplied with
+`BACKUP_S3_ACCESS_KEY_ID` and `BACKUP_S3_SECRET_ACCESS_KEY`. Set
+`BACKUP_S3_ENDPOINT` for S3-compatible services such as MinIO or Cloudflare R2.
+Storage failures are recorded per target and do not discard the MongoDB
+snapshot. Backups can be downloaded individually or exported as a ZIP from the
+Backups module.
 
 ## Supported device drivers
 
@@ -268,7 +299,7 @@ for login, registration during setup, setup status, and health checks.
 | Sites | `GET/POST /api/sites`, `PATCH/DELETE /api/sites/:id` |
 | Topology | `POST /api/topology/verify`, `POST /api/topology/build` |
 | Credentials | `/api/credentials` and `/api/credentials/:id` |
-| Configurations | `/api/configs`, `/api/configs/:id`, `/api/configs/diff`, `POST /api/configs/:id/restore` |
+| Backups | `/api/configs`, `/api/configs/:id`, `/api/configs/storage/status`, `/api/configs/diff`, `POST /api/configs/:id/restore`, `/api/backup-groups` |
 | Templates | `/api/templates`, `POST /api/templates/:id/preview`, `POST /api/templates/:id/push` |
 | Jobs | `/api/jobs`, `/api/jobs/:id`, `POST /api/jobs`, `POST /api/jobs/:id/cancel` |
 | Schedules | `/api/schedules` |

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import api, { apiErrorMessage } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import {
@@ -296,6 +296,22 @@ export default function Templates() {
           </button>
         ) : null}
       </div>
+
+      <nav className="row gap" aria-label="Template tools">
+        <NavLink to="/templates" end className={({ isActive }) => `btn sm ${isActive ? 'primary' : 'ghost'}`}>
+          Configuration templates
+        </NavLink>
+        {canOperate ? (
+          <>
+            <NavLink to="/templates/site-vlan" className={({ isActive }) => `btn sm ${isActive ? 'primary' : 'ghost'}`}>
+              Add VLAN to site
+            </NavLink>
+          <NavLink to="/templates/mac-vlan" className={({ isActive }) => `btn sm ${isActive ? 'primary' : 'ghost'}`}>
+            MAC VLAN assignment
+          </NavLink>
+          </>
+        ) : null}
+      </nav>
 
       <div className="card">
         {loading ? (

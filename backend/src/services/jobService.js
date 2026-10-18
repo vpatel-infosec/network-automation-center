@@ -13,6 +13,7 @@ import { backupDevice } from './backupService.js';
 import { SECRET_FIELDS } from './credentialService.js';
 import { audit } from './auditService.js';
 import { emitJobUpdate, emitBroadcast } from '../socketBus.js';
+import { buildSiteVlanConfig } from './siteVlanService.js';
 
 const MAX_OUTPUT = 100000;
 
@@ -20,13 +21,14 @@ const DEFAULT_NAMES = {
   backup: 'Configuration backup',
   command: 'Command execution',
   push_template: 'Template push',
+  site_vlan: 'Site VLAN creation',
   restore: 'Configuration restore',
 };
 
 /** Create the job document (queued). Call startJob() to execute it. */
 export async function createJob(payload, user) {
   const type = payload.type;
-  if (!['backup', 'command', 'push_template', 'restore'].includes(type)) {
+  if (!['backup', 'command', 'push_template', 'site_vlan', 'restore'].includes(type)) {
     throw new AppError(`Unsupported job type: ${type}`, 400);
   }
 
@@ -50,6 +52,11 @@ export async function createJob(payload, user) {
   if (type === 'push_template' && !doc.template) {
     throw new AppError('A template push job needs a template', 400);
   }
+    if (type === 'site_vlan') {
+      if (!doc.variables.site || !Number.isInteger(Number(doc.variables.vlanId))) {
+        throw new AppError('A site VLAN job needs a site and VLAN ID', 400);
+      }
+    }
   if (type === 'restore') {
     if (!doc.configVersion) throw new AppError('A restore job needs the configuration version to restore', 400);
     const version = await ConfigVersion.findById(doc.configVersion).select('device');
@@ -233,8 +240,11 @@ async function runOneDevice({ job, device, template, version }) {
       };
     }
 
-    const content =
-      job.type === 'push_template' ? renderTemplate(template, job.variables, device) : version.content;
+    const content = job.type === 'push_template'
+      ? renderTemplate(template, job.variables, device)
+      : job.type === 'site_vlan'
+        ? buildSiteVlanConfig(device, job.variables.vlanId, job.variables.vlanName)
+        : version.content;
 
     const push = await withDeviceSession(device, device.credential, (session, driver) => {
       if (driver.supportsPush === false) {

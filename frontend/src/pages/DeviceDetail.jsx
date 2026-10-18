@@ -19,6 +19,10 @@ import {
 import DiffViewer from '../components/DiffViewer.jsx';
 import DeviceForm from './DeviceForm.jsx';
 
+function safeFilenamePart(value) {
+  return String(value || 'device').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^\.+/, '').slice(0, 80) || 'device';
+}
+
 export default function DeviceDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -85,6 +89,37 @@ export default function DeviceDetail() {
       const { data } = await api.post(`/devices/${id}/backup`);
       toast.success(data.changed ? `Stored configuration v${data.version}` : `No change (still v${data.version})`);
       load();
+    } catch (error) {
+      toast.error(apiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const backupAndDownload = async () => {
+    setBusy(true);
+    try {
+      const { data: backup } = await api.post(`/devices/${id}/backup`);
+      let versionId = backup.configVersionId;
+      if (!versionId) {
+        const { data: history } = await api.get('/configs', { params: { device: id, limit: 1 } });
+        versionId = history.items[0]?._id;
+      }
+      if (!versionId) throw new Error('The backup completed, but no stored configuration version was found.');
+
+      const { data } = await api.get(`/configs/${versionId}`);
+      const version = data.version;
+      const filename = `running-config-${safeFilenamePart(device.host)}-${safeFilenamePart(device.name)}-v${version.version}-${new Date(version.createdAt).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')}.cfg`;
+      const url = URL.createObjectURL(new Blob([version.content], { type: 'text/plain;charset=utf-8' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+      toast.success(`Backup v${version.version} downloaded`);
+      await load();
     } catch (error) {
       toast.error(apiErrorMessage(error));
     } finally {
@@ -181,6 +216,9 @@ export default function DeviceDetail() {
               </button>
               <button type="button" className="btn ghost" disabled={busy} onClick={backupNow}>
                 Backup now
+              </button>
+              <button type="button" className="btn ghost" disabled={busy} onClick={backupAndDownload}>
+                Backup & download
               </button>
               <button type="button" className="btn ghost" onClick={() => setEditing(true)}>
                 Edit
