@@ -14,7 +14,8 @@
     "smoke": "node scripts/smokeTest.js --memory",
     "gen:key": "node scripts/generateKey.js",
     "seed:admin": "node scripts/createAdmin.js",
-    "seed:user": "node scripts/createUser.js"
+    "seed:user": "node scripts/createUser.js",
+    "seed:demo": "node scripts/seedDemoData.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1146.0",
