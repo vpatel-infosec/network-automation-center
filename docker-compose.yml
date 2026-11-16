@@ -9,6 +9,8 @@ services:
   mongo:
     image: mongo:7
     restart: unless-stopped
+    ports:
+      - "27017:27017"
     volumes:
       - mongo-data:/data/db
     healthcheck:
@@ -46,7 +48,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       # Optional: expose the API directly (the frontend proxies to it internally)
-      - "5000:5000"
+      - "5050:5000"
     volumes:
       - ${BACKUP_FILE_STORAGE_HOST_PATH:-backup-files}:/var/lib/nac-backups
 

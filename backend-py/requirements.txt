@@ -1,0 +1,15 @@
+fastapi[all]
+uvicorn
+beanie
+motor
+passlib[bcrypt]
+python-jose[cryptography]
+python-socketio
+netmiko
+scrapli
+scrapli-community
+apscheduler
+python-dotenv
+httpx
+pydantic-settings
+python-multipart
