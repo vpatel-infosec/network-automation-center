@@ -606,20 +606,26 @@ export default function Topology() {
           <table className="table">
             <thead>
               <tr>
-                <th>From</th>
-                <th>To</th>
+                <th>From Device</th>
+                <th>To Device</th>
                 <th>Protocols</th>
-                <th>Interfaces</th>
               </tr>
             </thead>
             <tbody>
               {(graph.links || []).map((link) => (
                 <tr key={link.id}>
-                  <td>{link.sourceDevice}</td>
-                  <td>{link.targetDevice}</td>
-                  <td>{link.protocols.join(' + ') || 'unknown'}</td>
-                  <td className="muted small">
-                    {link.localInterface} → {link.remoteInterface}
+                  <td>
+                    <div className="font-bold">{link.sourceDevice}</div>
+                    <div className="muted small">{link.sourceIp}</div>
+                    <div className="small font-mono mt-1 text-primary">Port: {link.localInterface}</div>
+                  </td>
+                  <td>
+                    <div className="font-bold">{link.targetDevice}</div>
+                    <div className="muted small">{link.targetIp}</div>
+                    <div className="small font-mono mt-1 text-primary">Port: {link.remoteInterface}</div>
+                  </td>
+                  <td>
+                    <div className="badge small">{link.protocols.join(' + ') || 'unknown'}</div>
                   </td>
                 </tr>
               ))}

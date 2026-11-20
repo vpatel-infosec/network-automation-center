@@ -201,7 +201,9 @@ export function buildTopologyGraph(devices = [], neighbors = []) {
     const existing = links.get(key) || {
       id: key,
       sourceDevice: sourceName,
+      sourceIp: neighbor.deviceIp || '',
       targetDevice: targetName,
+      targetIp: neighbor.remoteIp || '',
       localInterface: normalizeInterface(neighbor.localInterface),
       remoteInterface: normalizeInterface(neighbor.remoteInterface),
       protocols: new Set(),
