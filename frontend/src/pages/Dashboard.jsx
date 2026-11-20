@@ -53,7 +53,7 @@ export default function Dashboard() {
   if (loading && !summary) return <Spinner full label="Loading dashboard..." />;
   if (!summary) return null;
 
-  const { devices, jobs, configs, audit } = summary;
+  const { devices, jobs, configs, audit, appVersion, vendorLatestVersions, vendorNotifications } = summary;
   const jobStatus = Object.fromEntries((jobs.byStatus || []).map((item) => [item._id, item.count]));
   const backupsPerDay = (configs.backupsPerDay || []).map((item) => ({
     label: item._id?.slice(5),
@@ -64,8 +64,10 @@ export default function Dashboard() {
     <div className="stack">
       <div className="page-head">
         <div>
-          <h2>Operations dashboard</h2>
-          <p className="muted small">Live overview of your network estate, jobs and configuration history</p>
+          <h2>
+            Operations dashboard <span className="badge badge-info small" style={{ marginLeft: 8 }}>v{appVersion}</span>
+          </h2>
+          <p className="muted small">Live overview of your network estate, jobs, system version and vendor advisories</p>
         </div>
         <div className="row gap">
           <button type="button" className="btn ghost" onClick={load}>
@@ -78,6 +80,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid stats">
+        <StatCard label="Platform Version" value={`v${appVersion}`} hint="NAC Core Engine" />
         <StatCard label="Devices" value={devices.total} hint={`${devices.reachable} reachable`} />
         <StatCard
           label="Unreachable"
@@ -93,12 +96,85 @@ export default function Dashboard() {
           hint="never or older than 24h"
         />
         <StatCard label="Jobs completed (7d)" value={jobStatus.completed || 0} tone="ok" />
-        <StatCard
-          label="Jobs failed (7d)"
-          value={(jobStatus.failed || 0) + (jobStatus.partial || 0)}
-          tone={jobStatus.failed ? 'bad' : ''}
-        />
       </div>
+
+      {/* Vendor Firmware / Version Advisory Section */}
+      <section className="card">
+        <div className="card-head">
+          <h3>📢 Vendor OS Release Advisories &amp; Firmware Status</h3>
+          <span className="muted small">Recommended latest OS versions by vendor</span>
+        </div>
+        <div className="grid two" style={{ padding: 16 }}>
+          <div>
+            <h4 style={{ marginBottom: 8 }}>Vendor Target Baseline Versions</h4>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Vendor</th>
+                  <th>Target OS Version</th>
+                  <th>Portal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vendorLatestVersions &&
+                  Object.entries(vendorLatestVersions)
+                    .filter(([key]) => key !== 'generic')
+                    .map(([key, info]) => (
+                      <tr key={key}>
+                        <td>
+                          <strong>{titleCase(key)}</strong> <span className="muted small">({info.name})</span>
+                        </td>
+                        <td>
+                          <span className="badge badge-info">v{info.latestOs}</span>
+                        </td>
+                        <td>
+                          {info.advisoryUrl ? (
+                            <a href={info.advisoryUrl} target="_blank" rel="noreferrer" className="link small">
+                              Vendor Release Notes ↗
+                            </a>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <h4 style={{ marginBottom: 8 }}>Device Version Notifications</h4>
+            {vendorNotifications && vendorNotifications.length ? (
+              <div className="space-y sm">
+                {vendorNotifications.map((notif) => (
+                  <div key={notif.vendor} className="card-box space-y sm">
+                    <div className="flex-between">
+                      <strong>{notif.vendorName}</strong>
+                      <span className={`badge ${notif.outdatedCount ? 'badge-warning' : 'badge-ok'}`}>
+                        {notif.outdatedCount
+                          ? `${notif.outdatedCount} outdated device(s)`
+                          : 'All devices up-to-date'}
+                      </span>
+                    </div>
+                    {notif.outdatedCount ? (
+                      <div className="small muted">
+                        Recommended: <code>{notif.latestOs}</code>
+                        <div style={{ marginTop: 4 }}>
+                          Outdated: {notif.outdatedDevices.map((d) => `${d.name} (${d.currentOs || 'unknown'})`).join(', ')}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="small muted">All registered {notif.vendorName} devices match latest target baseline.</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="muted small">No vendor notifications currently active.</p>
+            )}
+          </div>
+        </div>
+      </section>
 
       <div className="grid two">
         <section className="card">

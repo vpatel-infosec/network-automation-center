@@ -2,8 +2,18 @@ import Device from '../models/Device.js';
 import Job from '../models/Job.js';
 import ConfigVersion from '../models/ConfigVersion.js';
 import AuditLog from '../models/AuditLog.js';
+import packageJson from '../../package.json' assert { type: 'json' };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Latest vendor OS versions for update advisory checks */
+const VENDOR_LATEST_VERSIONS = {
+  cisco: { latestOs: '17.12.01', name: 'Cisco IOS-XE / NX-OS', advisoryUrl: 'https://software.cisco.com' },
+  aruba: { latestOs: '10.13.00', name: 'ArubaOS-CX', advisoryUrl: 'https://asp.arubanetworks.com' },
+  juniper: { latestOs: '23.4R1', name: 'Junos OS', advisoryUrl: 'https://support.juniper.net' },
+  ubiquiti: { latestOs: '3.2.12', name: 'UniFi OS / EdgeOS', advisoryUrl: 'https://ui.com/download' },
+  generic: { latestOs: 'N/A', name: 'Generic SSH', advisoryUrl: '' },
+};
 
 /** Aggregated numbers for the dashboard page. */
 export async function summary(req, res) {
@@ -22,6 +32,7 @@ export async function summary(req, res) {
     latestPerDevice,
     configTotal,
     staleBackups,
+    devicesWithOs,
   ] = await Promise.all([
     Device.countDocuments(),
     Device.countDocuments({ 'status.reachable': true }),
@@ -67,9 +78,34 @@ export async function summary(req, res) {
     Device.countDocuments({
       $or: [{ 'status.lastBackupAt': { $exists: false } }, { 'status.lastBackupAt': { $lt: staleBefore } }],
     }),
+    Device.find({}, 'name vendor model osVersion status.reachable').lean(),
   ]);
 
+  // Evaluate vendor updates / notifications
+  const vendorNotifications = Object.keys(VENDOR_LATEST_VERSIONS)
+    .filter((v) => v !== 'generic')
+    .map((vendorKey) => {
+      const vendorInfo = VENDOR_LATEST_VERSIONS[vendorKey];
+      const vendorDevices = devicesWithOs.filter((d) => d.vendor === vendorKey);
+      const outdatedDevices = vendorDevices.filter(
+        (d) => d.osVersion && d.osVersion.trim() !== '' && d.osVersion.trim() !== vendorInfo.latestOs
+      );
+      return {
+        vendor: vendorKey,
+        vendorName: vendorInfo.name,
+        latestOs: vendorInfo.latestOs,
+        advisoryUrl: vendorInfo.advisoryUrl,
+        totalDevices: vendorDevices.length,
+        outdatedCount: outdatedDevices.length,
+        outdatedDevices: outdatedDevices.map((d) => ({ id: d._id, name: d.name, currentOs: d.osVersion })),
+      };
+    })
+    .filter((v) => v.totalDevices > 0);
+
   res.json({
+    appVersion: packageJson.version || '1.0.0',
+    vendorLatestVersions: VENDOR_LATEST_VERSIONS,
+    vendorNotifications,
     devices: {
       total,
       reachable,
@@ -86,3 +122,4 @@ export async function summary(req, res) {
 }
 
 export default { summary };
+
