@@ -27,6 +27,7 @@ const NAV_ITEMS = [
   { to: '/templates', label: 'Templates', icon: '⌘' },
   { to: '/jobs', label: 'Automation jobs', icon: '▶' },
   { to: '/credentials', label: 'Credentials', icon: '⚿' },
+  { to: '/vulnerabilities', label: 'Vulnerabilities', icon: '🛡️' },
   { to: '/users', label: 'Users', icon: '☗', adminOnly: true },
   { to: '/audit', label: 'Audit log', icon: '▣', operatorOnly: true },
 ];

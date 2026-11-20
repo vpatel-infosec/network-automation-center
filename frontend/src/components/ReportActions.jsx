@@ -13,7 +13,7 @@ export default function ReportActions() {
   const [busy, setBusy] = useState(false);
 
   if (pathname.startsWith('/users') && user?.role !== 'admin') return null;
-  if (['/audit', '/credentials', '/schedules', '/sites'].includes(pathname) && user?.role === 'viewer') return null;
+  if (['/audit', '/credentials', '/schedules', '/sites', '/vulnerabilities'].includes(pathname) && user?.role === 'viewer') return null;
 
   const runReport = async () => {
     setBusy(true);

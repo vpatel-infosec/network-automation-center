@@ -17,6 +17,7 @@ import Schedules from './pages/Schedules.jsx';
 import Credentials from './pages/Credentials.jsx';
 import Users from './pages/Users.jsx';
 import Audit from './pages/Audit.jsx';
+import Vulnerabilities from './pages/Vulnerabilities.jsx';
 import Topology from './pages/Topology.jsx';
 
 function Protected({ children, adminOnly = false, operatorOnly = false }) {
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/sites" element={<Sites />} />
         <Route path="/monitoring" element={<Monitoring />} />
         <Route path="/topology" element={<Topology />} />
+        <Route path="/vulnerabilities" element={<Vulnerabilities />} />
         <Route path="/backups" element={<Configurations />} />
         <Route path="/backups/schedules" element={<Schedules />} />
         <Route path="/configs" element={<Navigate to="/backups" replace />} />
