@@ -98,6 +98,13 @@ can reach device management addresses and required SSH or HTTPS ports.
 - Compare versions with line-based diffs and change summaries.
 - Preview Handlebars templates and extract template variables before pushing.
 - Restore a saved configuration through the relevant device driver, with an
+
+### Vulnerability Assessment
+
+- Upload Excel (`.xlsx`) or CSV assessment checklists and define security/compliance rules (checkId, name, severity, command, expectedRegex, remediation).
+- Run compliance scans against target devices: the system connects via SSH, executes commands, and flags pass/fail status based on regular expressions.
+- View detailed assessment reports, identify failing checks, and follow provided remediation advice.
+
   optional follow-up backup.
 
 ### Topology discovery
